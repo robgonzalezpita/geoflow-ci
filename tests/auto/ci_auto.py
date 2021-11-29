@@ -54,18 +54,18 @@ class GHInterface:
 
 
 def set_action_from_label(machine, actions, label):
-    ''' Match the label that initiates a job with an action in the dict'''
-    # <machine>-<compiler>-<test> i.e. hera-gnu-RT
+    ''' Match the label that initiates a job with an action in the dict
+        Labels have a ci- prefix'''
+    # ci-<machine>-<compiler>-<test> i.e. ci-hera-intel-build
     logger = logging.getLogger('MATCH_LABEL_WITH_ACTIONS')
-    logger.info('Setting action from Label')
-    split_label = label.name.split('-')
+    logger.info('Setting action from Label {label}')
+    # split the label apart and remove its prefix
+    split_label = label.name.split('-')[1:]
     # Make sure it has three parts
     if len(split_label) != 3:
         return False, False
-    # Break the parts into their variables
-    label_machine = split_label[0]
-    label_compiler = split_label[1]
-    label_action = split_label[2]
+    # Break out the label parts
+    label_machine, label_compiler, label_action = split_label
     # check machine name matches
     if not re.match(label_machine, machine):
         return False, False
@@ -79,25 +79,28 @@ def set_action_from_label(machine, actions, label):
     return label_compiler, action_match
 
 
-def get_preqs_with_actions(repos, machine, ghinterface_obj, actions):
+def get_preqs_with_actions(repos, machine_dict, ghinterface_obj, actions):
     ''' Create list of dictionaries of a pull request
         and its machine label and action '''
     logger = logging.getLogger('GET_PREQS_WITH_ACTIONS')
     logger.info('Getting Pull Requests with Actions')
-    gh_preqs = [ghinterface_obj.client.get_repo(repo['address'])
-                .get_pulls(state='open', sort='created', base=repo['base'])
-                for repo in repos]
-    each_pr = [preq for gh_preq in gh_preqs for preq in gh_preq]
-    preq_labels = [{'preq': pr, 'label': label} for pr in each_pr
-                   for label in pr.get_labels()]
-
     jobs = []
-    for pr_label in preq_labels:
-        compiler, match = set_action_from_label(machine, actions,
-                                                pr_label['label'])
-        if match:
-            pr_label['action'] = match
-            jobs.append(Job(pr_label.copy(), ghinterface_obj, machine, compiler))
+    for repo in repos:
+        gh_preqs = [ghinterface_obj.client.get_repo(repo['address'])
+                                   .get_pulls(state='open', sort='created',
+                                              base=repo['base'])]
+
+        each_pr = [preq for gh_preq in gh_preqs for preq in gh_preq]
+        preq_labels = [{'preq': pr, 'label': label} for pr in each_pr
+                       for label in pr.get_labels()]
+
+        for pr_label in preq_labels:
+            compiler, match = set_action_from_label(machine_dict['machine'],
+                                                    actions, pr_label['label'])
+            if match:
+                pr_label['action'] = match
+                jobs.append(Job(pr_label.copy(), ghinterface_obj,
+                                machine_dict, compiler, repo))
 
     return jobs
 
@@ -119,18 +122,22 @@ class Job:
         provided by the bash script
     '''
 
-    def __init__(self, preq_dict, ghinterface_obj, machine, compiler):
+    def __init__(self, preq_dict, ghinterface_obj, machine_dict, compiler,
+                 repo):
         self.logger = logging.getLogger('JOB')
         self.preq_dict = preq_dict
-        self.job_mod = importlib.import_module(
-                       f'jobs.{self.preq_dict["action"].lower()}')
+        # both build and WE2E tests call same module
+        self.job_mod = importlib.import_module('jobs.build')
         self.ghinterface_obj = ghinterface_obj
-        self.machine = machine
+        self.machine = machine_dict['machine']
         self.compiler = compiler
+        self.repo = repo
+        self.hpc_acc = machine_dict['hpc_acc']
+        self.workdir = machine_dict['workdir']
         self.comment_text = ''
         self.failed_tests = []
 
-    def comment_text_append(self, newtext):
+    def comment_append(self, newtext):
         self.comment_text += f'{newtext}\n'
 
     def remove_pr_label(self):
@@ -141,7 +148,7 @@ class Job:
     def check_label_before_job_start(self):
         # LETS Check the label still exists before the start of the job in the
         # case of multiple jobs
-        label_to_check = f'{self.machine}'\
+        label_to_check = f'ci-{self.machine}'\
                          f'-{self.compiler}'\
                          f'-{self.preq_dict["action"]}'
         labels = self.preq_dict['preq'].get_labels()
@@ -158,7 +165,6 @@ class Job:
                 output = subprocess.Popen(command, shell=True, cwd=in_cwd,
                                           stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT)
-                output.wait()
             except Exception as e:
                 self.job_failed(logger, 'subprocess.Popen', exception=e)
             else:
@@ -176,9 +182,9 @@ class Job:
     def run(self):
         logger = logging.getLogger('JOB/RUN')
         logger.info(f'Starting Job: {self.preq_dict["label"]}')
-        self.comment_text_append(newtext=f'Machine: {self.machine}')
-        self.comment_text_append(f'Compiler: {self.compiler}')
-        self.comment_text_append(f'Job: {self.preq_dict["action"]}')
+        self.comment_append(newtext=f'Machine: {self.machine}')
+        self.comment_append(f'Compiler: {self.compiler}')
+        self.comment_append(f'Job: {self.preq_dict["action"]}')
         if self.check_label_before_job_start():
             try:
                 logger.info('Calling remove_pr_label')
@@ -195,11 +201,11 @@ class Job:
     def send_comment_text(self):
         logger = logging.getLogger('JOB/SEND_COMMENT_TEXT')
         logger.info(f'Comment Text: {self.comment_text}')
-        self.comment_text_append('Please make changes and add '
-                                 'the following label back:')
-        self.comment_text_append(f'{self.machine}'
-                                 f'-{self.compiler}'
-                                 f'-{self.preq_dict["action"]}')
+        self.comment_append('If test failed, please make changes and add '
+                            'the following label back:')
+        self.comment_append(f'ci-{self.machine}'
+                            f'-{self.compiler}'
+                            f'-{self.preq_dict["action"]}')
 
         self.preq_dict['preq'].create_issue_comment(self.comment_text)
 
@@ -211,36 +217,39 @@ class Job:
             logger.critical(f'STDOUT: {[item for item in out if not None]}')
             logger.critical(f'STDERR: {[eitem for eitem in err if not None]}')
 
-            
+
 def setup_env():
     logger = logging.getLogger('SETUP')
 
-    hostname = os.getenv('HOSTNAME')
-    if bool(re.match(re.compile('hfe.+'), hostname)):
-        machine = 'hera'
-    elif bool(re.match(re.compile('hecflow.+'), hostname)):
-        machine = 'hera'
-    elif bool(re.match(re.compile('fe.+'), hostname)):
-        machine = 'jet'
-        os.environ['ACCNR'] = 'h-nems'
-    elif bool(re.match(re.compile('gaea.+'), hostname)):
-        machine = 'gaea'
-        os.environ['ACCNR'] = 'nggps_emc'
-    elif bool(re.match(re.compile('Orion-login.+'), hostname)):
-        machine = 'orion'
-    elif bool(re.match(re.compile('chadmin.+'), hostname)):
-        machine = 'cheyenne'
-        os.environ['ACCNR'] = 'P48503002'
+    config = config_parser()
+
+    # Pull machine specific values from a config file
+    # Only very specific values will work - see docs
+
+    file_name = 'CImachine.cfg'
+    if not os.path.exists(file_name):
+        logger.info(f'Could not find {file_name}')
+        raise KeyError(f'Machine config file {file_name} '
+                       'not found. Exiting.')
     else:
-        raise KeyError(f'Hostname: {hostname} does not match '
-                       'for a supported system. Exiting.')
+        machine_dict = {}
+        config.read(file_name)
+        machine_dict['machine'] = config['DEFAULT']['machine']
+        machine_dict['hpc_acc'] = config['DEFAULT']['hpc_acc']
+        machine_dict['workdir'] = config['DEFAULT']['workdir']
+
+    if not os.path.exists(machine_dict['workdir']):
+        raise KeyError(f'Work directory from config file '
+                       f'{machine_dict["workdir"]} not found. Exiting.')
 
     # Build dictionary of GitHub repositories to check
     # from config file. Workflow repo matched to app repo
-    config = config_parser()
+
     file_name = 'CIrepos.cfg'
     if not os.path.exists(file_name):
-        logger.info('Could not find CIrepos.cfg')
+        logger.info(f'Could not find {file_name}')
+        raise KeyError(f'Repo config file {file_name} '
+                       'not found. Exiting.')
     else:
         repo_dict = []
         config.read(file_name)
@@ -258,7 +267,7 @@ def setup_env():
     # Approved Actions
     action_list = ['build', 'WE']
 
-    return machine, repo_dict, action_list
+    return machine_dict, repo_dict, action_list
 
 
 def main():
@@ -273,7 +282,7 @@ def main():
 
     # setup environment
     logger.info('Getting the environment setup')
-    machine, repos, actions = setup_env()
+    machine_dict, repos, actions = setup_env()
 
     # setup interface with GitHub
     logger.info('Setting up GitHub interface.')
@@ -283,7 +292,7 @@ def main():
     # and turn them into Job objects
     logger.info('Getting all pull requests, '
                 'labels and actions applicable to this machine.')
-    jobs = get_preqs_with_actions(repos, machine,
+    jobs = get_preqs_with_actions(repos, machine_dict,
                                   ghinterface_obj, actions)
     [job.run() for job in jobs]
 
