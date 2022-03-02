@@ -5,7 +5,7 @@ Automation of UFS Regression Testing for ufs-weather-model
 This script automates the process of UFS CI for
 code managers at NOAA-EMC
 
-This script should be started through start_ci_auto.sh so that
+This script should be started through start_ci_py_pro.sh so that
 env vars and Python paths are set up prior to start.
 """
 from github import Github as gh
