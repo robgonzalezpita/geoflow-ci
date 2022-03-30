@@ -216,11 +216,12 @@ def process_gen(job_obj, gen_log_loc, gen_log_name):
     logger = logging.getLogger('BUILD/PROCESS_GEN')
     gen_log = f'{gen_log_loc}/{gen_log_name}'
     error_string = 'ERROR'
+    error_msg = 'err_msg'
     gen_failed = False
     if os.path.exists(gen_log):
         with open(gen_log) as fname:
             for line in fname:
-                if error_string in line:
+                if error_string in line or error_msg in line:
                     job_obj.comment_append('Generating Workflow Failed')
                     gen_failed = True
                     logger.info('Generating workflow failed')
@@ -243,7 +244,7 @@ def process_expt(job_obj, expts_base_dir):
     complete_expts = []
     expt_list = os.listdir(expts_base_dir)
     complete_string = "This cycle is complete"
-    failed_string = "FAILED"
+    failed_string = "DEAD"
 
     # Set issue id for cases where workflow does not start
     issue_id = 0
