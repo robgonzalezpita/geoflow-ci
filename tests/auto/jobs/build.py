@@ -22,10 +22,9 @@ def run(job_obj):
     os.environ['SR_WX_APP_TOP_DIR'] = pr_repo_loc
     build_script_loc = pr_repo_loc + '/test'
     log_name = 'build.out'
-    # machine passed twice to work with both build script versions:
-    # passing in machine, and not erroring for only one arg
+    # passing in machine for build
     create_build_commands = [[f'./build.sh {job_obj.machine} '
-                              f'{job_obj.machine} >& {log_name}',
+                              f' >& {log_name}',
                              build_script_loc]]
     logger.info('Running test build script')
     job_obj.run_commands(logger, create_build_commands)
@@ -38,7 +37,26 @@ def run(job_obj):
     if build_success:
         job_obj.comment_append('Build was Successful')
         if job_obj.preq_dict["action"] == 'WE':
-            expt_script_loc = pr_repo_loc + '/regional_workflow/tests/WE2E'
+            # See if a previous job on same PR is still running
+            cfg_file = 'Longjob.cfg'
+            # See if there are any tests already running for this PR
+            if os.path.exists(cfg_file):
+                config = config_parser()
+                config.read(cfg_file)
+                num_sections = len(config.sections())
+                num_tests = 0
+                # Remove any older tests with the same PR ID
+                for ci_log in config.sections():
+                    if str(job_obj.preq_dict["preq"].id) in ci_log:
+                        num_tests = num_tests + 1
+                        config.remove_section(ci_log)
+                # If those were the only tests, delete the file
+                if num_sections == num_tests:
+                    os.remove(cfg_file)
+                    # Still need to remove cron jobs and maybe output dirs
+                    # Maybe write a message to PR (older issue id)
+            # Start the workflow process
+            expt_script_loc = pr_repo_loc + '/tests/WE2E'
             expts_base_dir = os.path.join(repo_dir_str, 'expt_dirs')
             log_name = 'expt.out'
             we2e_script = expt_script_loc + '/setup_WE2E_tests.sh'
@@ -57,7 +75,10 @@ def run(job_obj):
                     # If workflow running, comments will be written
                     issue_id = process_expt(job_obj, expts_base_dir)
                 else:
-                    gen_log_loc = pr_repo_loc + '/regional_workflow/ush'
+                    setup_log = os.path.join(expt_script_loc, log_name)
+                    if os.path.exists(setup_log):
+                        process_setup(job_obj, setup_log)
+                    gen_log_loc = pr_repo_loc + '/ush'
                     gen_log_name = 'log.generate_FV3LAM_wflow'
                     process_gen(job_obj, gen_log_loc, gen_log_name)
             else:
@@ -206,6 +227,26 @@ def process_logfile(job_obj, ci_log):
                         f'.{job_obj.compiler} '
                         f'{job_obj.preq_dict["action"]} log')
         raise FileNotFoundError
+
+
+def process_setup(job_obj, setup_log):
+    """
+    Runs after setup for a rocoto workflow
+    Checks to see if an error has occurred
+    """
+    logger = logging.getLogger('BUILD/PROCESS_SETUP')
+    error_string = 'ERROR'
+    setup_failed = False
+    with open(setup_log) as fname:
+        for line in fname:
+            if error_string in line:
+                job_obj.comment_append('Setup for Workflow Failed')
+                setup_failed = True
+                logger.info('Setup for workflow failed')
+            if setup_failed:
+                job_obj.comment_append(f'{line.rstrip()}')
+    if setup_failed:
+        raise Exception('Setup for workflow could not complete ')
 
 
 def process_gen(job_obj, gen_log_loc, gen_log_name):
