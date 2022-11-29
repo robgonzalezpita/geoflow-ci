@@ -1,8 +1,8 @@
 """
-Revising this Python program to use for WE2E testing. It is based on:
+Python program to use for integration testing. It is based on:
 Automation of UFS Regression Testing for ufs-weather-model
 
-Oct 2022 - adding code to also automate GSI regression tests
+Nov 2022 - adding code to also automate GeoFLOW regression tests
 
 This script automates the process of UFS CI for
 code managers at NOAA-EMC
@@ -127,8 +127,7 @@ class Job:
                  repo):
         self.logger = logging.getLogger('JOB')
         self.preq_dict = preq_dict
-        # both SRWA build and WE2E tests call same module build.py
-        # GSI regression tests call regr.py
+
         if self.preq_dict["action"] == "rt":
             self.job_mod = importlib.import_module('jobs.regr')
         else:
@@ -153,8 +152,8 @@ class Job:
     def check_label_before_job_start(self):
         # LETS Check the label still exists before the start of the job in the
         # case of multiple jobs
-        label_to_check = f'ci-{self.machine}'\
-                         f'-{self.compiler}'\
+        label_to_check = f'ci-{self.machine}'            \
+                         f'-{self.compiler}'             \
                          f'-{self.preq_dict["action"]}'
         labels = self.preq_dict['preq'].get_labels()
         label_match = next((label for label in labels
@@ -266,9 +265,9 @@ def setup_env():
                 'name': config[ci_repo]['base_name'],
                 'address': config[ci_repo]['base_address'],
                 'base': config[ci_repo]['base_branch'],
-                'app_name': config[ci_repo]['app_name'],
-                'app_address': config[ci_repo]['app_address'],
-                'app_branch': config[ci_repo]['app_branch']
+                # 'app_name': config[ci_repo]['app_name'],
+                # 'app_address': config[ci_repo]['app_address'],
+                # 'app_branch': config[ci_repo]['app_branch']
             }
             repo_dict.append(one_repo)
 

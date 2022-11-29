@@ -1,7 +1,7 @@
 """
 Name: build.py
 Python to clone and build a repo and if requested run
-End to End workflow tests.
+Integration tests.
 """
 
 # Imports
@@ -19,7 +19,7 @@ def run(job_obj):
     logger = logging.getLogger('BUILD/RUN')
     pr_repo_loc, repo_dir_str = clone_pr_repo(job_obj, job_obj.workdir)
     # Setting this for the tests/build.sh script
-    os.environ['SR_WX_APP_TOP_DIR'] = pr_repo_loc
+    os.environ['GEOFLOW_TOP_DIR'] = pr_repo_loc
     build_script_loc = pr_repo_loc + '/tests'
     log_name = 'build.out'
     # passing in machine for build
@@ -34,59 +34,59 @@ def run(job_obj):
     logger.info(f'Action: {job_obj.preq_dict["action"]}')
     # Comments have not yet been written
     issue_id = 0
-    if build_success:
-        job_obj.comment_append('Build was Successful')
-        if job_obj.preq_dict["action"] == 'WE':
-            # See if a previous job on same PR is still running
-            cfg_file = 'Longjob.cfg'
-            # See if there are any tests already running for this PR
-            if os.path.exists(cfg_file):
-                config = config_parser()
-                config.read(cfg_file)
-                num_sections = len(config.sections())
-                num_tests = 0
-                # Remove any older tests with the same PR ID
-                for ci_log in config.sections():
-                    if str(job_obj.preq_dict["preq"].id) in ci_log:
-                        num_tests = num_tests + 1
-                        config.remove_section(ci_log)
-                # If those were the only tests, delete the file
-                if num_sections == num_tests:
-                    os.remove(cfg_file)
-                    # Still need to remove cron jobs and maybe output dirs
-                    # Maybe write a message to PR (older issue id)
-            # Start the workflow process
-            expt_script_loc = pr_repo_loc + '/tests/WE2E'
-            expts_base_dir = os.path.join(repo_dir_str, 'expt_dirs')
-            log_name = 'expt.out'
-            we2e_script = expt_script_loc + '/setup_WE2E_tests.sh'
-            if os.path.exists(we2e_script):
-                logger.info('Running end to end test')
-                create_expt_commands = \
-                    [[f'./setup_WE2E_tests.sh {job_obj.machine} '
-                      f'{job_obj.hpc_acc} {job_obj.compiler} >& '
-                      f'{log_name}', expt_script_loc]]
-                job_obj.run_commands(logger, create_expt_commands)
-                logger.info('After end_to_end script')
-                # no experiment dir or no test dirs in it suggests error
-                if os.path.exists(expts_base_dir) and \
-                   len(os.listdir(expts_base_dir)):
-                    job_obj.comment_append('Rocoto jobs started')
-                    # If workflow running, comments will be written
-                    issue_id = process_expt(job_obj, expts_base_dir)
-                else:
-                    setup_log = os.path.join(expt_script_loc, log_name)
-                    if os.path.exists(setup_log):
-                        process_setup(job_obj, setup_log)
-                    gen_log_loc = pr_repo_loc + '/ush'
-                    gen_log_name = 'log.generate_FV3LAM_wflow'
-                    process_gen(job_obj, gen_log_loc, gen_log_name)
-            else:
-                job_obj.comment_append(f'Script {we2e_script} '
-                                       'does not exist in repo')
-                job_obj.comment_append('Cannot run WE2E tests')
-    else:
-        job_obj.comment_append('Build Failed')
+    # if build_success:
+    #     job_obj.comment_append('Build was Successful')
+    #     if job_obj.preq_dict["action"] == 'WE':
+    #         # See if a previous job on same PR is still running
+    #         cfg_file = 'Longjob.cfg'
+    #         # See if there are any tests already running for this PR
+    #         if os.path.exists(cfg_file):
+    #             config = config_parser()
+    #             config.read(cfg_file)
+    #             num_sections = len(config.sections())
+    #             num_tests = 0
+    #             # Remove any older tests with the same PR ID
+    #             for ci_log in config.sections():
+    #                 if str(job_obj.preq_dict["preq"].id) in ci_log:
+    #                     num_tests = num_tests + 1
+    #                     config.remove_section(ci_log)
+    #             # If those were the only tests, delete the file
+    #             if num_sections == num_tests:
+    #                 os.remove(cfg_file)
+    #                 # Still need to remove cron jobs and maybe output dirs
+    #                 # Maybe write a message to PR (older issue id)
+    #         # Start the workflow process
+    #         expt_script_loc = pr_repo_loc + '/tests/WE2E'
+    #         expts_base_dir = os.path.join(repo_dir_str, 'expt_dirs')
+    #         log_name = 'expt.out'
+    #         we2e_script = expt_script_loc + '/setup_WE2E_tests.sh'
+    #         if os.path.exists(we2e_script):
+    #             logger.info('Running end to end test')
+    #             create_expt_commands = \
+    #                 [[f'./setup_WE2E_tests.sh {job_obj.machine} '
+    #                   f'{job_obj.hpc_acc} {job_obj.compiler} >& '
+    #                   f'{log_name}', expt_script_loc]]
+    #             job_obj.run_commands(logger, create_expt_commands)
+    #             logger.info('After end_to_end script')
+    #             # no experiment dir or no test dirs in it suggests error
+    #             if os.path.exists(expts_base_dir) and \
+    #                len(os.listdir(expts_base_dir)):
+    #                 job_obj.comment_append('Rocoto jobs started')
+    #                 # If workflow running, comments will be written
+    #                 issue_id = process_expt(job_obj, expts_base_dir)
+    #             else:
+    #                 setup_log = os.path.join(expt_script_loc, log_name)
+    #                 if os.path.exists(setup_log):
+    #                     process_setup(job_obj, setup_log)
+    #                 gen_log_loc = pr_repo_loc + '/ush'
+    #                 gen_log_name = 'log.generate_FV3LAM_wflow'
+    #                 process_gen(job_obj, gen_log_loc, gen_log_name)
+    #         else:
+    #             job_obj.comment_append(f'Script {we2e_script} '
+    #                                    'does not exist in repo')
+    #             job_obj.comment_append('Cannot run WE2E tests')
+    # else:
+    #     job_obj.comment_append('Build Failed')
 
     # Only write out comments if not already written after workflow running
     if issue_id == 0:
@@ -102,30 +102,17 @@ def clone_pr_repo(job_obj, workdir):
     new_name = job_obj.preq_dict['preq'].head.repo.name
     new_repo = job_obj.preq_dict['preq'].head.repo.full_name
     new_branch = job_obj.preq_dict['preq'].head.ref
-    # These are for the default app repo that goes with the workflow
-    try:
-        auth_repo = job_obj.repo["app_address"]
-        auth_branch = job_obj.repo["app_branch"]
-    except Exception as e:
-        logger.info('Error getting app address and branch from config dict')
-        job_obj.job_failed(logger, 'clone_pr_repo', exception=e)
-    app_name = auth_repo.split("/")[1]
-    # The new repo is the default repo
+   
     git_url = f'https://${{ghapitoken}}@github.com/{new_repo}'
 
-    # If the new repo is the regional workflow (not the app)
-    if new_name != app_name:
-        # look for a matching app repo/branch
-        app_repo = os.path.join(job_obj.preq_dict['preq'].head.user.login,
-                                app_name)
-        branch_list = list(job_obj.ghinterface_obj.client.get_repo(app_repo)
-                           .get_branches())
-        if new_branch in [branch.name for branch in branch_list]:
-            git_url = f'https://${{ghapitoken}}@github.com/{app_repo}'
-            app_branch = new_branch
-        else:
-            git_url = f'https://${{ghapitoken}}@github.com/{auth_repo}'
-            app_branch = auth_branch
+    # look for a matching app repo/branch
+    app_repo = job_obj.preq_dict['preq'].head.user.login
+    branch_list = list(job_obj.ghinterface_obj.client.get_repo(app_repo)
+                       .get_branches())
+    if new_branch in [branch.name for branch in branch_list]:
+        git_url = f'https://${{ghapitoken}}@github.com/{app_repo}'
+        app_branch = new_branch
+
     else:
         app_branch = new_branch
 
