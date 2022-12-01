@@ -1,7 +1,7 @@
 """
-Name: build.py
-Python to clone and build a repo and if requested run
-Integration tests.
+Name: regr.py
+Python to clone and build a GSI repo and run
+regression tests.
 """
 
 # Imports
@@ -14,16 +14,18 @@ from configparser import ConfigParser as config_parser
 
 def run(job_obj):
     """
-    Runs a CI test for a PR
+    Runs a regression test for a GSI PR
     """
-    logger = logging.getLogger('BUILD/RUN')
+    logger = logging.getLogger('REGR/RUN')
     pr_repo_loc, repo_dir_str = clone_pr_repo(job_obj, job_obj.workdir)
-    build_script_loc = pr_repo_loc + '/ci_tests'
+    # Setting this for local testing
+    os.environ['config_path'] = job_obj.workdir
+    build_script_loc = pr_repo_loc + '/ush'
     log_name = 'build.out'
     # passing in machine for build
-    create_build_commands = [[f'./build.sh'
-                              f' >& {log_name}',
-                             build_script_loc]]
+    create_build_commands = [['module purge', pr_repo_loc],
+                             [f'module use modulefiles;module load gsi_{job_obj.machine}.{job_obj.compiler}', pr_repo_loc],
+                             [f'./build.sh ../ ' f' >& {log_name}', build_script_loc]]
     logger.info('Running test build script')
     job_obj.run_commands(logger, create_build_commands)
     # Read the build log to see whether it succeeded
@@ -35,54 +37,23 @@ def run(job_obj):
     issue_id = 0
     if build_success:
         job_obj.comment_append('Build was Successful')
-        if job_obj.preq_dict["action"] == 'int':
-            # See if a previous job on same PR is still running
-            cfg_file = 'Longjob.cfg'
-            # See if there are any tests already running for this PR
-            if os.path.exists(cfg_file):
-                config = config_parser()
-                config.read(cfg_file)
-                num_sections = len(config.sections())
-                num_tests = 0
-                # Remove any older tests with the same PR ID
-                for ci_log in config.sections():
-                    if str(job_obj.preq_dict["preq"].id) in ci_log:
-                        num_tests = num_tests + 1
-                        config.remove_section(ci_log)
-                # If those were the only tests, delete the file
-                if num_sections == num_tests:
-                    os.remove(cfg_file)
-                    # Still need to remove cron jobs and maybe output dirs
-                    # Maybe write a message to PR (older issue id)
-            # Start the workflow process
-            expt_script_loc = pr_repo_loc + '/ci_tests/integration_tests'
-            expts_base_dir = os.path.join(repo_dir_str, 'expt_dirs')
-            log_name = 'expt.out'
-            integration_script = expt_script_loc + '/integration_tests.sh'
-            if os.path.exists(integration_script):
-                logger.info('Running integration test')
-                create_expt_commands = \
-                    [[f'./integration_tests.sh >&'
-                      f'{log_name}', expt_script_loc]]
-                job_obj.run_commands(logger, create_expt_commands)
-        #        logger.info('After end_to_end script')
-        #         # no experiment dir or no test dirs in it suggests error
-        #         if os.path.exists(expts_base_dir) and \
-        #            len(os.listdir(expts_base_dir)):
-        #             job_obj.comment_append('Rocoto jobs started')
-        #             # If workflow running, comments will be written
-        #             issue_id = process_expt(job_obj, expts_base_dir)
-        #         else:
-        #             setup_log = os.path.join(expt_script_loc, log_name)
-        #             if os.path.exists(setup_log):
-        #                 process_setup(job_obj, setup_log)
-        #             gen_log_loc = pr_repo_loc + '/ush'
-        #             gen_log_name = 'log.generate_FV3LAM_wflow'
-        #             process_gen(job_obj, gen_log_loc, gen_log_name)
-            else:
-                job_obj.comment_append(f'Script {integration_script} '
-                                       'does not exist in repo')
-                job_obj.comment_append('Cannot run Integration tests')
+        if job_obj.preq_dict["action"] == 'rt':
+            logger.info('Running GSI regression test')
+            log_name = 'gsi_ctest.out'
+            ctest_loc = pr_repo_loc + '/build/regression'
+            create_regr_commands = \
+                [[f'ctest --verbose >& '
+                  f'{log_name}', ctest_loc]]
+            job_obj.run_commands(logger, create_regr_commands)
+            logger.info('After GSI regression test')
+            ci_log = f'{ctest_loc}/{log_name}'
+            error_strings = ['Test #', 'Test  #', 'ed the', 'Thus',
+                             'resulting', 'job has']
+            if os.path.exists(ci_log):
+                with open(ci_log) as fname:
+                    for line in fname:
+                        if any(x in line for x in error_strings):
+                            job_obj.comment_append(f'{line.rstrip().replace("#", "")}')
     else:
         job_obj.comment_append('Build Failed')
 
@@ -94,22 +65,20 @@ def run(job_obj):
 
 def clone_pr_repo(job_obj, workdir):
     ''' clone the GitHub pull request repo, via command line '''
-   
-    logger = logging.getLogger('BUILD/CLONE_PR_REPO')
+    logger = logging.getLogger('REGR/CLONE_PR_REPO')
 
     # These are for the new/head repo in the PR
     new_repo = job_obj.preq_dict['preq'].head.repo.full_name
     new_branch = job_obj.preq_dict['preq'].head.ref
-   
+    
     # The new repo is the default repo
     git_url = f'https://${{ghapitoken}}@github.com/{new_repo}'
 
-
     logger.info(f'GIT URL: {git_url}')
-    logger.info(f'app branch: {new_branch}')
+    logger.info(f'new_branch: {new_branch}')
     logger.info('Starting repo clone')
-    repo_dir_str = f'{workdir}/'\
-                   f'{str(job_obj.preq_dict["preq"].id)}/'\
+    repo_dir_str = f'{workdir}/pr/'                                        \
+                   f'{str(job_obj.preq_dict["preq"].id)}/'                 \
                    f'{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}'
     pr_repo_loc = f'{repo_dir_str}'
     job_obj.comment_append(f'Repo location: {pr_repo_loc}')
@@ -117,7 +86,6 @@ def clone_pr_repo(job_obj, workdir):
     create_repo_commands = [
         [f'mkdir -p "{repo_dir_str}"', os.getcwd()],
         [f'git clone -b {new_branch} {git_url}', repo_dir_str]]
-    
     job_obj.run_commands(logger, create_repo_commands)
 
     logger.info('Finished repo clone')
@@ -125,13 +93,13 @@ def clone_pr_repo(job_obj, workdir):
 
 
 def post_process(job_obj, build_script_loc, log_name, pr_repo_loc):
-    logger = logging.getLogger('BUILD/POST_PROCESS')
+    logger = logging.getLogger('REGR/POST_PROCESS')
     ci_log = f'{build_script_loc}/{log_name}'
     geoflow_cdg = pr_repo_loc + '/build/bin/geoflow_cdg'
     build_succeeded = False
 
     if os.path.exists(ci_log):
-        # was the executable created?
+        # were the executables created?
         if os.path.exists(geoflow_cdg): # and os.path.exists(enkf_exe):
             build_succeeded = True
         if build_succeeded:
@@ -147,60 +115,6 @@ def post_process(job_obj, build_script_loc, log_name, pr_repo_loc):
                         f'.{job_obj.compiler} '
                         f'{job_obj.preq_dict["action"]} log')
         raise FileNotFoundError
-    
-
-    
-
-
-# def process_logfile(job_obj, ci_log):
-#     """
-#     Runs after code has been cloned and built
-#     Checks to see whether build was successful or failed
-#     """
-#     logger = logging.getLogger('BUILD/PROCESS_LOGFILE')
-#     fail_string = 'FAIL'
-#     success_string = 'ALL BUILDS SUCCEEDED'
-#     build_succeeded = False
-#     if os.path.exists(ci_log):
-#         with open(ci_log) as fname:
-#             for line in fname:
-#                 if fail_string in line:
-#                     job_obj.comment_append(f'{line.rstrip()}')
-#                 elif success_string in line:
-#                     build_succeeded = True
-#         if build_succeeded:
-#             logger.info('Build was successful')
-#         else:
-#             logger.info('Build failed')
-#             job_obj.comment_append('Build failed')
-#             raise Exception('Build failed abruptly ')
-
-#         return build_succeeded
-#     else:
-#         logger.critical(f'Could not find {job_obj.machine}'
-#                         f'.{job_obj.compiler} '
-#                         f'{job_obj.preq_dict["action"]} log')
-#         raise FileNotFoundError
-
-
-def process_setup(job_obj, setup_log):
-    """
-    Runs after setup for a rocoto workflow
-    Checks to see if an error has occurred
-    """
-    logger = logging.getLogger('BUILD/PROCESS_SETUP')
-    error_string = 'ERROR'
-    setup_failed = False
-    with open(setup_log) as fname:
-        for line in fname:
-            if error_string in line:
-                job_obj.comment_append('Setup for Workflow Failed')
-                setup_failed = True
-                logger.info('Setup for workflow failed')
-            if setup_failed:
-                job_obj.comment_append(f'{line.rstrip()}')
-    if setup_failed:
-        raise Exception('Setup for workflow could not complete ')
 
 
 def process_gen(job_obj, gen_log_loc, gen_log_name):
@@ -208,7 +122,7 @@ def process_gen(job_obj, gen_log_loc, gen_log_name):
     Runs after a rocoto workflow has been generated
     Checks to see if an error has occurred
     """
-    logger = logging.getLogger('BUILD/PROCESS_GEN')
+    logger = logging.getLogger('REGR/PROCESS_GEN')
     gen_log = f'{gen_log_loc}/{gen_log_name}'
     error_string = 'ERROR'
     error_msg = 'err_msg'
@@ -230,7 +144,7 @@ def process_expt(job_obj, expts_base_dir):
     Assumes that more expt directories can appear after this job has started
     Checks for success or failure for each expt
     """
-    logger = logging.getLogger('BUILD/PROCESS_EXPT')
+    logger = logging.getLogger('REGR/PROCESS_EXPT')
     expt_done = 0
     # wait time for workflow is time_mult * sleep_time seconds
     time_mult = 2

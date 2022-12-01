@@ -1,8 +1,7 @@
 """
 Name: ci_long.py
 This Python program reads a config file that has information
-on End to End workflow tests that were not completed, and
-returns status information.
+on Integration tests that were not completed, and returns status information.
 
 This script should be started through start_ci_py_pro.sh so that
 env vars and Python paths are set up prior to start.
@@ -20,7 +19,6 @@ class GHInterface:
     '''
     This class stores information for communicating with GitHub
     ...
-
     Attributes
     ----------
     GHACCESSTOKEN : str
@@ -131,3 +129,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    

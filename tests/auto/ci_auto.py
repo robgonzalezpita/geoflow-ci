@@ -1,9 +1,7 @@
 """
-Revising this Python program to use for WE2E testing. It is based on:
+Python program to use for integration testing. It is based on:
 Automation of UFS Regression Testing for ufs-weather-model
 
-This script automates the process of UFS CI for
-code managers at NOAA-EMC
 
 This script should be started through start_ci_py_pro.sh so that
 env vars and Python paths are set up prior to start.
@@ -125,8 +123,11 @@ class Job:
                  repo):
         self.logger = logging.getLogger('JOB')
         self.preq_dict = preq_dict
-        # both build and WE2E tests call same module
-        self.job_mod = importlib.import_module('jobs.build')
+
+        if self.preq_dict["action"] == "rt":
+            self.job_mod = importlib.import_module('jobs.regr')
+        else:
+            self.job_mod = importlib.import_module('jobs.build')
         self.ghinterface_obj = ghinterface_obj
         self.machine = machine_dict['machine']
         self.compiler = compiler
@@ -147,8 +148,8 @@ class Job:
     def check_label_before_job_start(self):
         # LETS Check the label still exists before the start of the job in the
         # case of multiple jobs
-        label_to_check = f'ci-{self.machine}'\
-                         f'-{self.compiler}'\
+        label_to_check = f'ci-{self.machine}'            \
+                         f'-{self.compiler}'             \
                          f'-{self.preq_dict["action"]}'
         labels = self.preq_dict['preq'].get_labels()
         label_match = next((label for label in labels
@@ -244,8 +245,7 @@ def setup_env():
         raise KeyError(f'Work directory from config file '
                        f'{machine_dict["workdir"]} not found. Exiting.')
 
-    # Build dictionary of GitHub repositories to check
-    # from config file. Workflow repo matched to app repo
+    # Build dictionary of GitHub repositories to check from config file. 
 
     file_name = 'CIrepos.cfg'
     if not os.path.exists(file_name):
@@ -260,14 +260,11 @@ def setup_env():
                 'name': config[ci_repo]['base_name'],
                 'address': config[ci_repo]['base_address'],
                 'base': config[ci_repo]['base_branch'],
-                'app_name': config[ci_repo]['app_name'],
-                'app_address': config[ci_repo]['app_address'],
-                'app_branch': config[ci_repo]['app_branch']
             }
             repo_dict.append(one_repo)
 
     # Approved Actions
-    action_list = ['build', 'WE']
+    action_list = ['build', 'int', 'rt']
 
     return machine_dict, repo_dict, action_list
 
