@@ -65,7 +65,7 @@ def run(job_obj):
                     [[f'./integration_tests.sh >&'
                       f'{log_name}', expt_script_loc]]
                 job_obj.run_commands(logger, create_expt_commands)
-                # logger.info('After end_to_end script')
+        #        logger.info('After end_to_end script')
         #         # no experiment dir or no test dirs in it suggests error
         #         if os.path.exists(expts_base_dir) and \
         #            len(os.listdir(expts_base_dir)):
