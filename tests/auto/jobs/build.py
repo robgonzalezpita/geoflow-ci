@@ -19,7 +19,7 @@ def run(job_obj):
     logger = logging.getLogger('BUILD/RUN')
     pr_repo_loc, repo_dir_str = clone_pr_repo(job_obj, job_obj.workdir)
     build_script_loc = pr_repo_loc + '/GeoFLOW/ci_tests'
-    log_name = pr_repo_loc + '/build/build.out'
+    log_name = 'build.out'
     # passing in machine for build
     create_build_commands = [[f'./build.sh'
                               f' >& {log_name}',
@@ -126,7 +126,7 @@ def clone_pr_repo(job_obj, workdir):
 def post_process(job_obj, build_script_loc, log_name, pr_repo_loc):
     logger = logging.getLogger('BUILD/POST_PROCESS')
     ci_log = f'{build_script_loc}/{log_name}'
-    geoflow_cdg = pr_repo_loc + '/build/bin/geoflow_cdg'
+    geoflow_cdg = pr_repo_loc + '/GeoFLOW/build/bin/geoflow_cdg'
     build_succeeded = False
 
     if os.path.exists(ci_log):
