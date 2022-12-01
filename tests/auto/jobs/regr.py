@@ -24,11 +24,8 @@ def run(job_obj):
     log_name = 'build.out'
     # passing in machine for build
     create_build_commands = [['module purge', pr_repo_loc],
-                             [f'module use modulefiles;module load gsi_{job_obj.machine}.{job_obj.compiler}',
-                              pr_repo_loc],
-                             [f'./build.sh ../ '
-                              f' >& {log_name}',
-                             build_script_loc]]
+                             [f'module use modulefiles;module load gsi_{job_obj.machine}.{job_obj.compiler}', pr_repo_loc],
+                             [f'./build.sh ../ ' f' >& {log_name}', build_script_loc]]
     logger.info('Running test build script')
     job_obj.run_commands(logger, create_build_commands)
     # Read the build log to see whether it succeeded
@@ -73,40 +70,22 @@ def clone_pr_repo(job_obj, workdir):
     # These are for the new/head repo in the PR
     new_repo = job_obj.preq_dict['preq'].head.repo.full_name
     new_branch = job_obj.preq_dict['preq'].head.ref
-    # These are for the default app repo that goes with the workflow
-    try:
-        auth_repo = job_obj.repo["app_address"]
-    except Exception as e:
-        logger.info('Error getting app address and branch from config dict')
-        job_obj.job_failed(logger, 'clone_pr_repo', exception=e)
-    app_name = auth_repo.split("/")[1]
+    
     # The new repo is the default repo
     git_url = f'https://${{ghapitoken}}@github.com/{new_repo}'
 
-    app_branch = new_branch
-
     logger.info(f'GIT URL: {git_url}')
-    logger.info(f'app branch: {app_branch}')
+    logger.info(f'new_branch: {new_branch}')
     logger.info('Starting repo clone')
-    repo_dir_str = f'{workdir}/pr/'\
-                   f'{str(job_obj.preq_dict["preq"].id)}/'\
+    repo_dir_str = f'{workdir}/pr/'                                        \
+                   f'{str(job_obj.preq_dict["preq"].id)}/'                 \
                    f'{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}'
-    pr_repo_loc = f'{repo_dir_str}/{app_name}'
+    pr_repo_loc = f'{repo_dir_str}'
     job_obj.comment_append(f'Repo location: {pr_repo_loc}')
 
     create_repo_commands = [
         [f'mkdir -p "{repo_dir_str}"', os.getcwd()],
-        [f'git clone -b {app_branch} {git_url}', repo_dir_str]]
-    job_obj.run_commands(logger, create_repo_commands)
-
-    # copy any extra or revised files needed
-    logger.info('Starting file copies')
-    create_repo_commands = [[f'cp -r {workdir}/vlab/GSI/fix/* fix/.',
-                             pr_repo_loc],
-                            [f'cp -r {workdir}/gsia/regression/regression_var.sh regression/.',
-                             pr_repo_loc],
-                            [f'cp -r {workdir}/gsia/regression/regression_driver.sh regression/.',
-                             pr_repo_loc]]
+        [f'git clone -b {new_branch} {git_url}', repo_dir_str]]
     job_obj.run_commands(logger, create_repo_commands)
 
     logger.info('Finished repo clone')
@@ -116,13 +95,12 @@ def clone_pr_repo(job_obj, workdir):
 def post_process(job_obj, build_script_loc, log_name, pr_repo_loc):
     logger = logging.getLogger('REGR/POST_PROCESS')
     ci_log = f'{build_script_loc}/{log_name}'
-    gsi_exe = pr_repo_loc + '/install/bin/gsi.x'
-    enkf_exe = pr_repo_loc + '/install/bin/enkf.x'
+    geoflow_cdg = pr_repo_loc + '/build/bin/geoflow_cdg'
     build_succeeded = False
 
     if os.path.exists(ci_log):
         # were the executables created?
-        if os.path.exists(gsi_exe) and os.path.exists(enkf_exe):
+        if os.path.exists(geoflow_cdg): # and os.path.exists(enkf_exe):
             build_succeeded = True
         if build_succeeded:
             logger.info('Build was successful')

@@ -2,10 +2,6 @@
 Python program to use for integration testing. It is based on:
 Automation of UFS Regression Testing for ufs-weather-model
 
-Nov 2022 - adding code to also automate GeoFLOW regression tests
-
-This script automates the process of UFS CI for
-code managers at NOAA-EMC
 
 This script should be started through start_ci_py_pro.sh so that
 env vars and Python paths are set up prior to start.
@@ -249,8 +245,7 @@ def setup_env():
         raise KeyError(f'Work directory from config file '
                        f'{machine_dict["workdir"]} not found. Exiting.')
 
-    # Build dictionary of GitHub repositories to check
-    # from config file. Workflow repo matched to app repo
+    # Build dictionary of GitHub repositories to check from config file. 
 
     file_name = 'CIrepos.cfg'
     if not os.path.exists(file_name):
@@ -265,14 +260,11 @@ def setup_env():
                 'name': config[ci_repo]['base_name'],
                 'address': config[ci_repo]['base_address'],
                 'base': config[ci_repo]['base_branch'],
-                # 'app_name': config[ci_repo]['app_name'],
-                # 'app_address': config[ci_repo]['app_address'],
-                # 'app_branch': config[ci_repo]['app_branch']
             }
             repo_dict.append(one_repo)
 
     # Approved Actions
-    action_list = ['build', 'WE', 'rt']
+    action_list = ['build', 'int', 'rt']
 
     return machine_dict, repo_dict, action_list
 
