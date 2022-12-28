@@ -55,19 +55,21 @@ def run(job_obj):
                     # Maybe write a message to PR (older issue id)
 
             # Set directories to submit integration_tests script
-            # To expand number of integration tests, create a directory with each input.jsn file in GeoFLOW repo, create an array of test cases below
+            # To expand number of integration tests, create a directory containing input.jsn files for each test in GeoFLOW repo,
+            # then create a python list of tests based on that directory in GeoFLOW to iterate over 
             expt_script_loc = os.path.join(pr_repo_loc, 'GeoFLOW/ci_tests/integration_tests')
             expts_base_dir = os.path.join(expt_script_loc, 'expt_dirs')
+            run_dir = os.path.join(expts_base_dir, 'test_inertgrav2d')
             integration_script = expt_script_loc + '/integration_tests.sh'
             input_json = pr_repo_loc + '/GeoFLOW/ci_tests/test_inertgrav2d.jsn'
             geoflow_cdg = pr_repo_loc + '/GeoFLOW/build/bin/geoflow_cdg'
             log_name = expts_base_dir + 'integration_test.out'
-            # To expand the number integration tests, iterate over them below, replacing test_inertgrav2d with an "expt" variable
+            # To expand the number integration tests, iterate over a list of them, replacing {run_dir} with a path for each test
             # Submit integration_tests.sh script
             if os.path.exists(integration_script):
                 logger.info('Running integration test')
                 create_expt_commands = \
-                    [[f'bash integration_tests.sh {expts_base_dir}/test_inertgrav2d {geoflow_cdg} {input_json} >&'
+                    [[f'bash integration_tests.sh {run_dir} {geoflow_cdg} {input_json} >&'
                       f'{log_name}', expt_script_loc]]
                 job_obj.run_commands(logger, create_expt_commands)
                 logger.info('After integration_tests script')
