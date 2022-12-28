@@ -1,7 +1,6 @@
 """
 Name: build.py
-Python to clone and build a repo and if requested run
-Integration tests.
+Python to clone and build a repo and if requested run Integration tests.
 """
 
 # Imports
@@ -63,10 +62,14 @@ def run(job_obj):
             integration_script = expt_script_loc + '/integration_tests.sh'
             input_json = pr_repo_loc + '/GeoFLOW/ci_tests/test_inertgrav2d.jsn'
             geoflow_cdg = pr_repo_loc + '/GeoFLOW/build/bin/geoflow_cdg'
-            log_name = expts_base_dir + 'integration_test.out'
+            log_name = expts_base_dir + '/integration_test.out'
             # To expand the number integration tests, iterate over a list of them, replacing {run_dir} with a path for each test
             # Submit integration_tests.sh script
             if os.path.exists(integration_script):
+                logger.info('Creating expt_dirs')
+                create_expt_dir_commands = \
+                    [f'mkdir -p {run_dir}']
+                job_obj.run_commands(logger, create_expt_dir_commands)
                 logger.info('Running integration test')
                 create_expt_commands = \
                     [[f'bash integration_tests.sh {run_dir} {geoflow_cdg} {input_json} >&'
@@ -195,7 +198,7 @@ def process_expt(job_obj, expts_base_dir):
         time.sleep(sleep_time)
         repeat_count = repeat_count - 1
         expt_list = os.listdir(expts_base_dir)
-        logger.info('Experiment dir after return of end_to_end')
+        logger.info('Experiment dir after return of integration tests')
         logger.info(expt_list)
         for expt in expt_list:
             expt_log = os.path.join(expts_base_dir, expt, 'slurm.out')
@@ -247,3 +250,4 @@ def process_expt(job_obj, expts_base_dir):
             config.write(fname)
 
     return issue_id
+
