@@ -1,7 +1,6 @@
 """
-Python program to use for integration testing. It is based on:
+Python program to use for GeoFLOW integration testing. It is based on:
 Automation of UFS Regression Testing for ufs-weather-model
-
 
 This script should be started through start_ci_py_pro.sh so that
 env vars and Python paths are set up prior to start.
@@ -54,7 +53,7 @@ class GHInterface:
 def set_action_from_label(machine, actions, label):
     ''' Match the label that initiates a job with an action in the dict
         Labels have a ci- prefix'''
-    # ci-<machine>-<compiler>-<test> i.e. ci-hera-intel-build
+    # ci-<machine>-<compiler>-<test> i.e. ci-hera-intel-build, ci-hera-gnu-int
     logger = logging.getLogger('MATCH_LABEL_WITH_ACTIONS')
     # split the label apart and remove its prefix
     split_label = label.name.split('-')[1:]

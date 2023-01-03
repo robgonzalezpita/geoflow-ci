@@ -76,8 +76,8 @@ def main():
     logger.info(f'Experiments running: {num_sections}')
 
     # Words to search for in log to signal success or failure
-    complete_string = "This cycle is complete"
-    failed_string = "DEAD"
+    complete_string = "geoflow: do shutdown..."
+    failed_string = "Force Terminated"
     expt_done_count = 0
 
     pr_comment = ''
@@ -129,4 +129,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
+
